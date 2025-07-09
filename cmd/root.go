@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/dajmeister/ddb/app"
+	"github.com/dajmeister/ddb/internal"
 )
 
 var cfgFile string
@@ -36,7 +36,7 @@ to quickly create a Cobra application.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		setupLogger()
 		var err error
-		client, err = app.DynamodbClient()
+		client, err = internal.DynamodbClient()
 		if err != nil {
 			logger.Error("failed to create dynamodb client")
 			return err

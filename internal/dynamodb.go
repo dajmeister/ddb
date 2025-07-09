@@ -1,4 +1,4 @@
-package app
+package internal
 
 import (
 	"context"
@@ -104,6 +104,25 @@ func PaginateQuery(client *dynamodb.Client, queryInput dynamodb.QueryInput) iter
 			page, err := paginator.NextPage(context.TODO())
 			if err != nil {
 				if !yield(nil, fmt.Errorf("failed to retrive page from query paginator [%w]", err)) {
+					return
+				}
+			}
+			for _, item := range page.Items {
+				if !yield(item, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func PaginateScan(client *dynamodb.Client, scanInput dynamodb.ScanInput) iter.Seq2[Item, error] {
+	return func(yield func(Item, error) bool) {
+		paginator := dynamodb.NewScanPaginator(client, &scanInput)
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(context.TODO())
+			if err != nil {
+				if !yield(nil, fmt.Errorf("failed to retrive page from scan paginator [%w]", err)) {
 					return
 				}
 			}

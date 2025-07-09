@@ -1,4 +1,4 @@
-package app
+package internal
 
 import (
 	"fmt"
@@ -7,11 +7,15 @@ import (
 )
 
 func PrintJson(json []byte, prettyPrint bool, colorOutput bool) {
+	var formatString string
 	if prettyPrint {
 		json = pretty.Pretty(json)
+		formatString = "%s"
+	} else {
+		formatString = "%s\n"
 	}
 	if colorOutput {
 		json = pretty.Color(json, nil)
 	}
-	fmt.Printf("%s\n", json)
+	fmt.Printf(formatString, json)
 }
