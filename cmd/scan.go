@@ -29,7 +29,7 @@ to quickly create a Cobra application.`,
 
 func runScan(cmd *cobra.Command, args []string) error {
 	tableName := viper.GetString("table")
-	paginator := internal.PaginateScan(client, dynamodb.ScanInput{
+	paginator := internal.IterateScan(client, dynamodb.ScanInput{
 		TableName: &tableName,
 	})
 

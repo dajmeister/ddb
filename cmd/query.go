@@ -51,7 +51,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to build query expression [%w]", err)
 	}
-	paginator := internal.PaginateQuery(client, dynamodb.QueryInput{
+	paginator := internal.IterateQuery(client, dynamodb.QueryInput{
 		TableName:                 &tableName,
 		KeyConditionExpression:    expr.KeyCondition(),
 		ExpressionAttributeNames:  expr.Names(),

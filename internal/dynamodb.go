@@ -97,7 +97,7 @@ func UnmarshalItem(dynamodbItem Item) (map[string]any, error) {
 	return item, nil
 }
 
-func PaginateQuery(client *dynamodb.Client, queryInput dynamodb.QueryInput) iter.Seq2[Item, error] {
+func IterateQuery(client *dynamodb.Client, queryInput dynamodb.QueryInput) iter.Seq2[Item, error] {
 	return func(yield func(Item, error) bool) {
 		paginator := dynamodb.NewQueryPaginator(client, &queryInput)
 		for paginator.HasMorePages() {
@@ -116,7 +116,7 @@ func PaginateQuery(client *dynamodb.Client, queryInput dynamodb.QueryInput) iter
 	}
 }
 
-func PaginateScan(client *dynamodb.Client, scanInput dynamodb.ScanInput) iter.Seq2[Item, error] {
+func IterateScan(client *dynamodb.Client, scanInput dynamodb.ScanInput) iter.Seq2[Item, error] {
 	return func(yield func(Item, error) bool) {
 		paginator := dynamodb.NewScanPaginator(client, &scanInput)
 		for paginator.HasMorePages() {
