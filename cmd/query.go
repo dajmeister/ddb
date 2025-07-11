@@ -6,6 +6,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -16,31 +17,56 @@ import (
 	"github.com/dajmeister/ddb/internal"
 )
 
+type queryArgs struct {
+	tableName    string
+	indexName    string
+	partitionKey string
+	sortKey      string
+}
+
 // queryCmd represents the query command
 var queryCmd = &cobra.Command{
 	Use:   "query",
 	Short: "query table",
 	Long:  `Query a dynamodb table for zero or more Items.`,
-	Args:  cobra.RangeArgs(1, 2),
+	Args:  cobra.RangeArgs(2, 3),
 	RunE:  runQuery,
 }
 
+func parseArgs(args []string) (string, string, string, string) {
+	table, index, _ := strings.Cut(args[0], ":")
+
+	partition := args[1]
+	sort := ""
+	if len(args) == 3 {
+		sort = args[2]
+	}
+	return table, index, partition, sort
+}
+
 func runQuery(cmd *cobra.Command, args []string) error {
-	tableName := viper.GetString("table")
+
+	tableName, indexName, partitionValue, sortValue := parseArgs(args)
 	logger.Debug(fmt.Sprintf("describing table %s", tableName))
-	keys, err := internal.GetKeys(client, tableName)
+	var keys []internal.Key
+	var err error
+	if indexName != "" {
+		keys, err = internal.GetIndexKeys(client, tableName, indexName)
+	} else {
+		keys, err = internal.GetTableKeys(client, tableName)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to get table keys: %w", err)
+		return fmt.Errorf("failed to get keys: %w", err)
 	}
 	partitionKey := keys[0] // partition key
-	partitionKeyValue, err := internal.MarshalArgument(args[0], partitionKey.AttributeType)
+	partitionKeyValue, err := internal.MarshalArgument(partitionValue, partitionKey.AttributeType)
 	if err != nil {
 		return fmt.Errorf("failed to marshal argument 1 with value %s to type %s [%w]", partitionKeyValue, partitionKey.AttributeType, err)
 	}
 	keyCondition := expression.Key(partitionKey.Name).Equal(expression.Value(partitionKeyValue))
-	if len(args) == 2 {
+	if sortValue != "" {
 		sortKey := keys[1]
-		sortKeyValue, err := internal.MarshalArgument(args[1], sortKey.AttributeType)
+		sortKeyValue, err := internal.MarshalArgument(sortValue, sortKey.AttributeType)
 		if err != nil {
 			return fmt.Errorf("failed to marshal argument 2 with value %s to type %s [%w]", sortKeyValue, sortKey.AttributeType, err)
 		}
@@ -51,12 +77,16 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to build query expression [%w]", err)
 	}
-	paginator := internal.IterateQuery(client, dynamodb.QueryInput{
+	queryInput := dynamodb.QueryInput{
 		TableName:                 &tableName,
 		KeyConditionExpression:    expr.KeyCondition(),
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
-	})
+	}
+	if indexName != "" {
+		queryInput.IndexName = &indexName
+	}
+	paginator := internal.IterateQuery(client, queryInput)
 
 	unmarshaller := internal.UnmarshalItems(paginator)
 

@@ -31,24 +31,53 @@ func DynamodbClient() (*dynamodb.Client, error) {
 		}
 		client = dynamodb.NewFromConfig(config)
 	}
-
 	return client, nil
-
 }
 
-func GetKeys(client *dynamodb.Client, table string) ([]Key, error) {
-	describe_output, err := client.DescribeTable(context.TODO(), &dynamodb.DescribeTableInput{
+func GetTableKeys(client *dynamodb.Client, table string) ([]Key, error) {
+	tableDescription, err := client.DescribeTable(context.TODO(), &dynamodb.DescribeTableInput{
 		TableName: &table,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe table [%w]", err)
 	}
 	attributes := make(Attributes)
-	for _, attribute := range describe_output.Table.AttributeDefinitions {
+	for _, attribute := range tableDescription.Table.AttributeDefinitions {
 		attributes[*attribute.AttributeName] = attribute
 	}
 	var keys []Key
-	for _, key := range describe_output.Table.KeySchema {
+	keySchema := tableDescription.Table.KeySchema
+	for _, key := range keySchema {
+		key_name := *key.AttributeName
+		keys = append(keys, Key{key_name, key.KeyType, attributes[key_name].AttributeType})
+	}
+	return keys, nil
+}
+
+func GetIndexKeys(client *dynamodb.Client, table string, index string) ([]Key, error) {
+	tableDescription, err := client.DescribeTable(context.TODO(), &dynamodb.DescribeTableInput{
+		TableName: &table,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe table [%w]", err)
+	}
+	attributes := make(Attributes)
+	for _, attribute := range tableDescription.Table.AttributeDefinitions {
+		attributes[*attribute.AttributeName] = attribute
+	}
+	allIndexes := make(map[string][]types.KeySchemaElement)
+	for _, indexDefinition := range tableDescription.Table.GlobalSecondaryIndexes {
+		allIndexes[*indexDefinition.IndexName] = indexDefinition.KeySchema
+	}
+	for _, indexDefinition := range tableDescription.Table.LocalSecondaryIndexes {
+		allIndexes[*indexDefinition.IndexName] = indexDefinition.KeySchema
+	}
+	keySchema, indexExists := allIndexes[index]
+	if !indexExists {
+		return nil, fmt.Errorf("table: %s doesn't have an index: %s", table, index)
+	}
+	var keys []Key
+	for _, key := range keySchema {
 		key_name := *key.AttributeName
 		keys = append(keys, Key{key_name, key.KeyType, attributes[key_name].AttributeType})
 	}

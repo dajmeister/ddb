@@ -66,12 +66,9 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ddb.yaml)")
-	rootCmd.PersistentFlags().StringP("table", "t", "", "table name")
 	rootCmd.PersistentFlags().BoolP("pretty", "p", true, "pretty print items")
 	rootCmd.PersistentFlags().Bool("color", true, "don't color output")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
-
-	rootCmd.MarkPersistentFlagRequired("table")
 }
 
 func initConfig() {

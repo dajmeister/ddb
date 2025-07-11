@@ -20,31 +20,38 @@ var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "get item",
 	Long:  `Get an Item from a dynamodb table.`,
-	Args:  cobra.RangeArgs(1, 2),
+	Args:  cobra.RangeArgs(2, 3),
 	RunE:  runGet,
 }
 
 func runGet(cmd *cobra.Command, args []string) error {
-	tableName := viper.GetString("table")
+	tableName, partitionValue := args[0], args[1]
+	sortValue := ""
+	if len(args) == 3 {
+		sortValue = args[2]
+	}
 	logger.Debug(fmt.Sprintf("describing table %s", tableName))
-	keys, err := internal.GetKeys(client, tableName)
+	keys, err := internal.GetTableKeys(client, tableName)
 	if err != nil {
 		return fmt.Errorf("failed to get table keys: %w", err)
 	}
-
-	if len(args) != len(keys) {
-		return fmt.Errorf("get requires one argument per key, %d were provided. table %s has %d key(s): %v", len(args), tableName, len(keys), keys)
-	}
 	getKeys := make(map[string]types.AttributeValue)
-	for element, arg := range args {
-		key := keys[element]
-		name := key.Name
-
-		attributeValue, err := internal.MarshalArgument(arg, key.AttributeType)
-		if err != nil {
-			return fmt.Errorf("failed to marshal argument %d with value: %s to type: %s - [%w]", element, arg, key.AttributeType, err)
+	partitionKey := keys[0] // partition key
+	partitionKeyValue, err := internal.MarshalArgument(partitionValue, partitionKey.AttributeType)
+	if err != nil {
+		return fmt.Errorf("failed to marshal argument 1 with value %s to type %s [%w]", partitionKeyValue, partitionKey.AttributeType, err)
+	}
+	getKeys[partitionKey.Name] = partitionKeyValue
+	if len(keys) == 2 {
+		if len(args) != 3 {
+			return fmt.Errorf("get requires one argument per key, %d were provided. table %s has keys: %v", len(args)-1, tableName, len(keys), keys)
 		}
-		getKeys[name] = attributeValue
+		sortKey := keys[1]
+		sortKeyValue, err := internal.MarshalArgument(sortValue, sortKey.AttributeType)
+		if err != nil {
+			return fmt.Errorf("failed to marshal argument 2 with value %s to type %s [%w]", sortKeyValue, sortKey.AttributeType, err)
+		}
+		getKeys[sortKey.Name] = sortKeyValue
 	}
 	logger.Debug("running get")
 	item, err := internal.GetItem(client, tableName, getKeys)
