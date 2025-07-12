@@ -44,7 +44,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 	getKeys[partitionKey.Name] = partitionKeyValue
 	if len(keys) == 2 {
 		if len(args) != 3 {
-			return fmt.Errorf("get requires one argument per key, %d were provided. table %s has keys: %v", len(args)-1, tableName, len(keys), keys)
+			return fmt.Errorf("get requires one argument per key, %d were provided. table %s has keys: %v", len(args)-1, tableName, keys)
 		}
 		sortKey := keys[1]
 		sortKeyValue, err := internal.MarshalArgument(sortValue, sortKey.AttributeType)

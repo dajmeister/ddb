@@ -17,14 +17,14 @@ import (
 	"github.com/dajmeister/ddb/internal"
 )
 
-type operator string
+type Operator string
 
 const (
-	equal            operator = "="
-	lessThan         operator = "<"
-	lessThanEqual    operator = "<="
-	greaterThan      operator = ">"
-	greaterThanEqual operator = ">="
+	Equal            Operator = "="
+	LessThan         Operator = "<"
+	LessThanEqual    Operator = "<="
+	GreaterThan      Operator = ">"
+	GreaterThanEqual Operator = ">="
 )
 
 type queryArgs struct {
@@ -32,7 +32,7 @@ type queryArgs struct {
 	indexName      string
 	partitionValue string
 	sortValue      string
-	sortOperator   operator
+	sortOperator   Operator
 }
 
 // queryCmd represents the query command
@@ -44,12 +44,12 @@ var queryCmd = &cobra.Command{
 	RunE:  runQuery,
 }
 
-func parseArg(arg string) (string, operator) {
+func ParseArg(arg string) (string, Operator) {
 	// <arg <=arg >arg >=arg
 	var value string
 	var found bool
-	var prefix operator
-	prefixes := []operator{lessThanEqual, greaterThanEqual, lessThan, greaterThan, equal}
+	var prefix Operator
+	prefixes := []Operator{LessThanEqual, GreaterThanEqual, LessThan, GreaterThan, Equal}
 
 	for _, prefix = range prefixes {
 		value, found = strings.CutPrefix(arg, string(prefix))
@@ -59,20 +59,21 @@ func parseArg(arg string) (string, operator) {
 	}
 
 	if !found {
-		prefix = "="
+		prefix = Equal
+		value = arg
 	}
-	logger.Debug(fmt.Sprintf("arg: %s, value: %s, prefix %s", arg, value, prefix))
+
 	return value, prefix
 }
 
-func parseArgs(args []string) queryArgs {
+func ParseArgs(args []string) queryArgs {
 	table, index, _ := strings.Cut(args[0], ":")
 
 	partition := args[1]
 	sort := ""
-	prefix := equal
+	prefix := Equal
 	if len(args) == 3 {
-		sort, prefix = parseArg(args[2])
+		sort, prefix = ParseArg(args[2])
 	}
 	return queryArgs{
 		tableName:      table,
@@ -84,7 +85,7 @@ func parseArgs(args []string) queryArgs {
 }
 
 func runQuery(cmd *cobra.Command, raw_args []string) error {
-	args := parseArgs(raw_args)
+	args := ParseArgs(raw_args)
 
 	logger.Debug(fmt.Sprintf("describing table %s", args.tableName))
 	var keys []internal.Key
@@ -113,15 +114,15 @@ func runQuery(cmd *cobra.Command, raw_args []string) error {
 		sortValueExpression := expression.Value(sortKeyValue)
 		var sortKeyCondition expression.KeyConditionBuilder
 		switch args.sortOperator {
-		case equal:
+		case Equal:
 			sortKeyCondition = sortKeyExpression.Equal(sortValueExpression)
-		case lessThan:
+		case LessThan:
 			sortKeyCondition = sortKeyExpression.LessThan(sortValueExpression)
-		case lessThanEqual:
+		case LessThanEqual:
 			sortKeyCondition = sortKeyExpression.LessThanEqual(sortValueExpression)
-		case greaterThan:
+		case GreaterThan:
 			sortKeyCondition = sortKeyExpression.GreaterThan(sortValueExpression)
-		case greaterThanEqual:
+		case GreaterThanEqual:
 			sortKeyCondition = sortKeyExpression.GreaterThanEqual(sortValueExpression)
 		}
 		keyCondition = keyCondition.And(sortKeyCondition)
