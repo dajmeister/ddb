@@ -17,11 +17,22 @@ import (
 	"github.com/dajmeister/ddb/internal"
 )
 
+type operator string
+
+const (
+	equal            operator = "="
+	lessThan         operator = "<"
+	lessThanEqual    operator = "<="
+	greaterThan      operator = ">"
+	greaterThanEqual operator = ">="
+)
+
 type queryArgs struct {
-	tableName    string
-	indexName    string
-	partitionKey string
-	sortKey      string
+	tableName      string
+	indexName      string
+	partitionValue string
+	sortValue      string
+	sortOperator   operator
 }
 
 // queryCmd represents the query command
@@ -33,44 +44,87 @@ var queryCmd = &cobra.Command{
 	RunE:  runQuery,
 }
 
-func parseArgs(args []string) (string, string, string, string) {
+func parseArg(arg string) (string, operator) {
+	// <arg <=arg >arg >=arg
+	var value string
+	var found bool
+	var prefix operator
+	prefixes := []operator{lessThanEqual, greaterThanEqual, lessThan, greaterThan, equal}
+
+	for _, prefix = range prefixes {
+		value, found = strings.CutPrefix(arg, string(prefix))
+		if found {
+			break
+		}
+	}
+
+	if !found {
+		prefix = "="
+	}
+	logger.Debug(fmt.Sprintf("arg: %s, value: %s, prefix %s", arg, value, prefix))
+	return value, prefix
+}
+
+func parseArgs(args []string) queryArgs {
 	table, index, _ := strings.Cut(args[0], ":")
 
 	partition := args[1]
 	sort := ""
+	prefix := equal
 	if len(args) == 3 {
-		sort = args[2]
+		sort, prefix = parseArg(args[2])
 	}
-	return table, index, partition, sort
+	return queryArgs{
+		tableName:      table,
+		indexName:      index,
+		partitionValue: partition,
+		sortValue:      sort,
+		sortOperator:   prefix,
+	}
 }
 
-func runQuery(cmd *cobra.Command, args []string) error {
+func runQuery(cmd *cobra.Command, raw_args []string) error {
+	args := parseArgs(raw_args)
 
-	tableName, indexName, partitionValue, sortValue := parseArgs(args)
-	logger.Debug(fmt.Sprintf("describing table %s", tableName))
+	logger.Debug(fmt.Sprintf("describing table %s", args.tableName))
 	var keys []internal.Key
 	var err error
-	if indexName != "" {
-		keys, err = internal.GetIndexKeys(client, tableName, indexName)
+	if args.indexName != "" {
+		keys, err = internal.GetIndexKeys(client, args.tableName, args.indexName)
 	} else {
-		keys, err = internal.GetTableKeys(client, tableName)
+		keys, err = internal.GetTableKeys(client, args.tableName)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to get keys: %w", err)
 	}
 	partitionKey := keys[0] // partition key
-	partitionKeyValue, err := internal.MarshalArgument(partitionValue, partitionKey.AttributeType)
+	partitionKeyValue, err := internal.MarshalArgument(args.partitionValue, partitionKey.AttributeType)
 	if err != nil {
 		return fmt.Errorf("failed to marshal argument 1 with value %s to type %s [%w]", partitionKeyValue, partitionKey.AttributeType, err)
 	}
 	keyCondition := expression.Key(partitionKey.Name).Equal(expression.Value(partitionKeyValue))
-	if sortValue != "" {
+	if args.sortValue != "" {
 		sortKey := keys[1]
-		sortKeyValue, err := internal.MarshalArgument(sortValue, sortKey.AttributeType)
+		sortKeyValue, err := internal.MarshalArgument(args.sortValue, sortKey.AttributeType)
 		if err != nil {
 			return fmt.Errorf("failed to marshal argument 2 with value %s to type %s [%w]", sortKeyValue, sortKey.AttributeType, err)
 		}
-		keyCondition = keyCondition.And(expression.Key(sortKey.Name).Equal(expression.Value(sortKeyValue)))
+		sortKeyExpression := expression.Key(sortKey.Name)
+		sortValueExpression := expression.Value(sortKeyValue)
+		var sortKeyCondition expression.KeyConditionBuilder
+		switch args.sortOperator {
+		case equal:
+			sortKeyCondition = sortKeyExpression.Equal(sortValueExpression)
+		case lessThan:
+			sortKeyCondition = sortKeyExpression.LessThan(sortValueExpression)
+		case lessThanEqual:
+			sortKeyCondition = sortKeyExpression.LessThanEqual(sortValueExpression)
+		case greaterThan:
+			sortKeyCondition = sortKeyExpression.GreaterThan(sortValueExpression)
+		case greaterThanEqual:
+			sortKeyCondition = sortKeyExpression.GreaterThanEqual(sortValueExpression)
+		}
+		keyCondition = keyCondition.And(sortKeyCondition)
 	}
 	builder := expression.NewBuilder().WithKeyCondition(keyCondition)
 	expr, err := builder.Build()
@@ -78,13 +132,13 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to build query expression [%w]", err)
 	}
 	queryInput := dynamodb.QueryInput{
-		TableName:                 &tableName,
+		TableName:                 &args.tableName,
 		KeyConditionExpression:    expr.KeyCondition(),
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 	}
-	if indexName != "" {
-		queryInput.IndexName = &indexName
+	if args.indexName != "" {
+		queryInput.IndexName = &args.indexName
 	}
 	paginator := internal.IterateQuery(client, queryInput)
 
