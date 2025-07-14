@@ -7,7 +7,7 @@ import (
 )
 
 func PrintJson(json []byte, prettyPrint bool, colorOutput bool) {
-	formatString := "%s"
+	formatString := "%s\n"
 	if prettyPrint {
 		json = pretty.Pretty(json)
 		formatString = "%s" // pretty.Pretty adds a newline
