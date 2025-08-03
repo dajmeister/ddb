@@ -69,6 +69,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("pretty", "p", true, "pretty print items")
 	rootCmd.PersistentFlags().Bool("color", true, "don't color output")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().StringSliceP("filter", "f", []string{}, "filters to apply to the operation")
 }
 
 func initConfig() {
